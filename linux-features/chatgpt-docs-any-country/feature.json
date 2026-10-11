@@ -1,9 +1,0 @@
-{
-  "id": "chatgpt-docs-any-country",
-  "title": "ChatGPT Docs in Any Country",
-  "description": "Keep the ChatGPT Docs/Library entry points available when the account's registration country is marked unavailable.",
-  "defaultEnabled": false,
-  "entrypoints": {
-    "patchDescriptors": "./patch.js"
-  }
-}
