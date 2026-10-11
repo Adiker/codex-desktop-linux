@@ -19,8 +19,8 @@ const {
 
 const FIXTURES = {
   "landing-route-current.js": `function route(){if(D===\`error\`||j?.tbo_config?.tbo_available==null||j.structure==null)return null;if(j.tbo_config.tbo_available){return redirect}}`,
-  "app-shared-current.js": `function capable(){if(account?.tbo_config?.tbo_available!==!0)throw Error();return account?.tbo_config?.tbo_available===!0}`,
-  "personalization-settings-current.js": `a?.tbo_config?.tbo_available!==!0; b?.tbo_config?.tbo_available!==!0;`,
+  "app-shared-current.js": `function capable(){if(e.query.getData(iq,t)?.accounts[t]?.account.tbo_config?.tbo_available!==!0)throw Error();return n?.accounts[t]?.account.tbo_config?.tbo_available===!0}`,
+  "personalization-settings-current.js": `_?.accounts[l]?.account.tbo_config?.tbo_available!==!0; c?.accounts[i]?.account.tbo_config?.tbo_available!==!0;`,
 };
 
 function withFeatureConfig(enabled, fn) {
@@ -70,13 +70,15 @@ test("landing route treats the local Dots capability as available", () => {
 
 test("shared Dots capability checks no longer reject a country-gated account", () => {
   const patched = applyDotsAppSharedPatch(FIXTURES["app-shared-current.js"]);
-  assert.equal(patched, "function capable(){if(account?.!1)throw Error();return account?.!0}");
+  assert.equal(patched, "function capable(){if(!1)throw Error();return !0}");
+  assert.doesNotMatch(patched, /\?\.[!01]/);
   assert.equal(applyDotsAppSharedPatch(patched), patched);
 });
 
 test("personalization Dots checks are patched together", () => {
   const patched = applyDotsPersonalizationPatch(FIXTURES["personalization-settings-current.js"]);
-  assert.equal(patched, "a?.!1; b?.!1;");
+  assert.equal(patched, "!1; !1;");
+  assert.doesNotMatch(patched, /\?\.[!01]/);
   assert.equal(applyDotsPersonalizationPatch(patched), patched);
 });
 

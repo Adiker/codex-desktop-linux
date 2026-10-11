@@ -6,11 +6,12 @@ const CONTRACTS = Object.freeze({
     ["if(j.tbo_config.tbo_available){", "if(!0){"],
   ],
   appShared: [
-    ["tbo_config?.tbo_available!==!0", "!1"],
-    ["tbo_config?.tbo_available===!0", "!0"],
+    ["e.query.getData(iq,t)?.accounts[t]?.account.tbo_config?.tbo_available!==!0", "!1"],
+    ["n?.accounts[t]?.account.tbo_config?.tbo_available===!0", "!0"],
   ],
   personalization: [
-    ["tbo_config?.tbo_available!==!0", "!1", 2],
+    ["_?.accounts[l]?.account.tbo_config?.tbo_available!==!0", "!1"],
+    ["c?.accounts[i]?.account.tbo_config?.tbo_available!==!0", "!1"],
   ],
 });
 
