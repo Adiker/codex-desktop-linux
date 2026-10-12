@@ -60,11 +60,10 @@ test("feature is disabled until selected", () => {
   });
 });
 
-test("landing route treats the local Dots capability as available", () => {
+test("landing route stays visible while preserving the server gate", () => {
   const patched = applyDotsLandingRoutePatch(FIXTURES["landing-route-current.js"]);
   assert.doesNotMatch(patched, /tbo_available==null/);
-  assert.doesNotMatch(patched, /if\(j\.tbo_config\.tbo_available\)/);
-  assert.match(patched, /if\(!0\)\{/);
+  assert.match(patched, /if\(j\.tbo_config\.tbo_available\)/);
   assert.equal(applyDotsLandingRoutePatch(patched), patched);
 });
 
@@ -83,7 +82,7 @@ test("personalization Dots checks are patched together", () => {
 });
 
 test("ambiguous contracts fail closed", () => {
-  const source = `${CONTRACTS.landingRoute[0][0]};${CONTRACTS.landingRoute[0][0]};${CONTRACTS.landingRoute[1][0]}`;
+  const source = `${CONTRACTS.landingRoute[0][0]};${CONTRACTS.landingRoute[0][0]}`;
   assert.equal(applyDotsLandingRoutePatch(source), source);
 });
 

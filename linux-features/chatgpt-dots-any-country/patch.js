@@ -3,7 +3,6 @@
 const CONTRACTS = Object.freeze({
   landingRoute: [
     ["j?.tbo_config?.tbo_available==null", "!1"],
-    ["if(j.tbo_config.tbo_available){", "if(!0){"],
   ],
   appShared: [
     ["e.query.getData(iq,t)?.accounts[t]?.account.tbo_config?.tbo_available!==!0", "!1"],
