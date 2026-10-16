@@ -184,6 +184,10 @@ function applyUnifiedComputerUsePatch(source) {
   // helper binding, including nested scopes that capture the injected value.
   const builderRoot = freshBuilderRoot(builderSource);
   const pathAlias = root.groups.path;
+  const { backends, defer, nodeRepl } = builder.groups;
+  if ([backends, defer, surfaces, nodeRepl].includes(pathAlias)) {
+    throw new Error("Linux unified Computer Use contract drift: native config builder shadows the path module");
+  }
   const edits = [
     {
       index: match.index,

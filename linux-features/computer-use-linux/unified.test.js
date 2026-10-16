@@ -224,3 +224,14 @@ test("unified propagation rejects missing, ambiguous, or changed builder consume
     assert.throws(() => patch(changed), /unified.*contract/i);
   }
 });
+
+
+test("unified builder patch fails closed when its bindings shadow the path module", () => {
+  for (const binding of ["b", "d", "s", "n"]) {
+    const start = selector.indexOf("function build(");
+    const end = selector.indexOf("async function initialize(");
+    const builder = selector.slice(start, end).replace(new RegExp(`\\b${binding}\\b`, "g"), "path");
+    const shadowed = selector.slice(0, start) + builder + selector.slice(end);
+    assert.throws(() => patch(shadowed), /native config builder shadows the path module/);
+  }
+});
