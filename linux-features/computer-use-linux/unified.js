@@ -97,7 +97,7 @@ function applyUnifiedComputerUsePatch(source) {
   // its cached selection, then pass that context through both builder calls.
   const builderPattern = new RegExp(
     `function (?<builder>[\\w$]+)\\(\\{browserBackends:(?<backends>[\\w$]+),deferTools:(?<defer>[\\w$]+),` +
-      `surfaces:(?<surfaces>[\\w$]+),nodeRepl:(?<nodeRepl>[\\w$]+)\\}(?<rootParam>,(?<pluginRoot>[\\w$]+))?\\)\\{`,
+      `surfaces:(?<surfaces>[\\w$]+),nodeRepl:(?<nodeRepl>[\\w$]+),accessBootstrapPath:(?<bootstrap>[\\w$]+)\\}(?<rootParam>,(?<pluginRoot>[\\w$]+))?\\)\\{`,
     "g",
   );
   const builders = [...source.matchAll(builderPattern)];
@@ -138,14 +138,24 @@ function applyUnifiedComputerUsePatch(source) {
   const currentBanners = [...builderSource.matchAll(currentBannerPattern)];
   const patchedBanners = [...builderSource.matchAll(patchedBannerPattern)];
   const callPattern = new RegExp(
-    `Object\\.assign\\([\\w$]+,${builder.groups.builder}\\((?<argument>[\\w$]+)(?<rootArg>,(?<pluginRoot>[\\w$]+))?\\)\\)`,
+    `Object\\.assign\\([\\w$]+,${builder.groups.builder}\\(\\{\\.\\.\\.(?<argument>[\\w$]+),accessBootstrapPath:(?<bootstrap>[\\w$]+)\\}(?<rootArg>,(?<pluginRoot>[\\w$]+))?\\)\\)`,
     "g",
   );
   const calls = [...source.matchAll(callPattern)];
   const callOwner = calls.length === 1 ? enclosingFunction(source, calls[0].index) : null;
   const callOwnerSource = callOwner == null ? "" : source.slice(callOwner.start, callOwner.end);
   const pluginRoots = [...callOwnerSource.matchAll(/[\w$]+=(?<path>[\w$]+)\.default\.join\((?<pluginRoot>[\w$]+),`\.mcp\.json`\)/g)];
+  if (pluginRoots.length !== 1) {
+    throw new Error("Linux unified Computer Use contract drift: changed plugin cache relationship");
+  }
+  const root = pluginRoots[0];
   const lifecycle = lifecycleContract(source, builder.groups.builder, callOwnerSource);
+  if (calls.length !== 1 || calls[0].groups.argument !== lifecycle.argument) {
+    throw new Error("Linux unified Computer Use contract drift: changed synchronization builder argument");
+  }
+  uniqueMatch(callOwnerSource, new RegExp(
+    `${escapeRegExp(calls[0].groups.bootstrap)}=${escapeRegExp(root.groups.path)}\\.default\\.join\\(${escapeRegExp(root.groups.pluginRoot)},\`require-browser-access\\.mjs\`\\)`, "g"),
+  "expected bootstrap path inside the plugin root");
   const serviceCurrent = currentServices.length === 1 && patchedServices.length === 0;
   const servicePatched = currentServices.length === 0 && patchedServices.length === 1;
   const bannerCurrent = currentBanners.length === 1 && patchedBanners.length === 0;
@@ -160,10 +170,6 @@ function applyUnifiedComputerUsePatch(source) {
     throw new Error("Linux unified Computer Use contract drift: expected one native trusted service selector");
   }
   const service = current ? currentServices[0] : patchedServices[0];
-  if (pluginRoots.length !== 1) {
-    throw new Error("Linux unified Computer Use contract drift: changed plugin cache relationship");
-  }
-  const root = pluginRoots[0];
   const argument = lifecycle.argument;
   uniqueMatch(callOwnerSource, new RegExp(
     `${escapeRegExp(root.groups.pluginRoot)}=${ID}\\.${ID}\\(\\{codexHome:${escapeRegExp(argument)}\\.codexHome,` +
@@ -192,8 +198,8 @@ function applyUnifiedComputerUsePatch(source) {
   // helper binding, including nested scopes that capture the injected value.
   const builderRoot = freshBuilderRoot(builderSource);
   const pathAlias = root.groups.path;
-  const { backends, defer, nodeRepl } = builder.groups;
-  if ([backends, defer, surfaces, nodeRepl].includes(pathAlias)) {
+  const { backends, defer, nodeRepl, bootstrap } = builder.groups;
+  if ([backends, defer, surfaces, nodeRepl, bootstrap].includes(pathAlias)) {
     throw new Error("Linux unified Computer Use contract drift: native config builder shadows the path module");
   }
   const edits = [
@@ -233,7 +239,7 @@ function applyUnifiedComputerUsePatch(source) {
     {
       index: calls[0].index,
       length: calls[0][0].length,
-      replacement: publishRoot + calls[0][0].replace(`(${calls[0].groups.argument})`, `(${calls[0].groups.argument},${pluginRoot})`),
+      replacement: publishRoot + calls[0][0].replace(`,accessBootstrapPath:${calls[0].groups.bootstrap}})`, `,accessBootstrapPath:${calls[0].groups.bootstrap}},${pluginRoot})`),
     },
     {
       index: lifecycle.sync.index,
