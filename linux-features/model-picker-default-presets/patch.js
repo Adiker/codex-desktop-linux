@@ -684,10 +684,10 @@ const LOCAL_COMPOSER_FALLBACK_PATTERN =
   /([A-Za-z_$][\w$]*)=([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*),([A-Za-z_$][\w$]*)==null\?void 0:`\$\{\4\.model\}:\$\{\4\.defaultReasoningEffort\}`\)/gu;
 const LOCAL_COMPOSER_SELECTION_PATTERN = new RegExp(
   `(?<handler>[A-Za-z_$][\\w$]*)=function\\((?<model>[A-Za-z_$][\\w$]*),(?<effort>[A-Za-z_$][\\w$]*),` +
-    `(?<options>[A-Za-z_$][\\w$]*)\\)\\{[\\s\\S]{0,500}?return (?<delegate>[A-Za-z_$][\\w$]*)==null\\?` +
-    `(?<base>[A-Za-z_$][\\w$]*)\\((?<normalizer>[A-Za-z_$][\\w$]*)\\(\\k<model>\\),\\k<effort>,` +
-    `(?<callback>[A-Za-z_$][\\w$]*),\\k<options>\\):\\k<delegate>\\.selectModelAndReasoningEffort\\(` +
-    `\\k<normalizer>\\(\\k<model>\\),\\k<effort>,\\k<callback>\\)\\}`,
+    `(?<options>[A-Za-z_$][\\w$]*)\\)\\{[\\s\\S]{0,500}?return (?<delegate>[A-Za-z_$][\\w$]*)\\?\\.isAeon\\?` +
+    `\\k<delegate>\\.selectModelAndReasoningEffort\\((?<normalizer>[A-Za-z_$][\\w$]*)\\(\\k<model>\\),` +
+    `\\k<effort>,(?<callback>[A-Za-z_$][\\w$]*)\\):(?<base>[A-Za-z_$][\\w$]*)\\(` +
+    `\\k<normalizer>\\(\\k<model>\\),\\k<effort>,\\k<callback>,\\k<options>\\)\\}`,
   "gu",
 );
 
@@ -899,8 +899,8 @@ function applyLocalComposerConfigPatch(source, context = {}) {
       "codexLinuxLocalDraftDefaultRef.current=codexLinuxLocalDraftDefaultScope;return ",
     )
     .replace(
-      `,${selectionGroups.options}):${selectionGroups.delegate}`,
-      `,codexLinuxLocalDefaultPresetOptions(${configVariable}!=null,${conversationVariable}==null,${selectionGroups.model},${selectionGroups.effort},${selectionGroups.options})):${selectionGroups.delegate}`,
+      `${selectionGroups.base}(${selectionGroups.normalizer}(${selectionGroups.model}),${selectionGroups.effort},${selectionGroups.callback},${selectionGroups.options})`,
+      `${selectionGroups.base}(${selectionGroups.normalizer}(${selectionGroups.model}),${selectionGroups.effort},${selectionGroups.callback},codexLinuxLocalDefaultPresetOptions(${configVariable}!=null,${conversationVariable}==null,${selectionGroups.model},${selectionGroups.effort},${selectionGroups.options}))`,
     );
   const draftRuntime =
     `/*${LOCAL_DRAFT_SELECTION_MARKER}*/;let codexLinuxLocalDraftDefaultRef=(0,${reactAlias}.useRef)(null),` +

@@ -101,13 +101,13 @@ function localComposerResolverFixture(name = "LocalPower") {
 
 function localComposerFixture(name = "LocalComposer") {
   return [
-    `function ${name}(available,serverConfig,conversationId,manualSelection){`,
+    `function ${name}(available,serverConfig,conversationId,manualSelection,managedSelection){`,
     "let host={hostId:`local`,cwd:`/repo`},hostId=host.hostId;",
-    "modelsForPicker(available);let{setDefaultModelAndReasoningEffort:setDefault}=selection,draftSelection=null;",
+    "modelsForPicker(available);let{setDefaultModelAndReasoningEffort:setDefault}=selection,draftSelection=managedSelection;",
     "let He=available.find(Wqr),Ue=Power(available,{includeUltraInSlider:true,sliderModelsConfig:serverConfig,stripGptPrefix:true}),",
     "Ge=Ue,Ke=zae(Ge,He==null?void 0:`${He.model}:${He.defaultReasoningEffort}`);",
     "picker({resetContextKey:JSON.stringify([conversationId,hostId,host.cwd])});",
-    "composer.mode.local.model.custom;let scratch=(0,React.useRef)(null),choose=function(e,t,n){let callback=()=>{};return draftSelection==null?select(normalize(e),t,callback,n):draftSelection.selectModelAndReasoningEffort(normalize(e),t,callback)};",
+    "composer.mode.local.model.custom;let scratch=(0,React.useRef)(null),choose=function(e,t,n){let callback=()=>{};return draftSelection?.isAeon?draftSelection.selectModelAndReasoningEffort(normalize(e),t,callback):select(normalize(e),t,callback,n)};",
     "function normalize(e){return e}let selected=manualSelection?choose(`gpt-5.6-sol`,`high`):null;",
     "let reset=zae(Ue,He==null?void 0:`${He.model}:${He.defaultReasoningEffort}`);",
     "render({onSelectDefault:reset});",
@@ -543,6 +543,7 @@ test("local composer uses configured pairs and lowers only its config threshold"
     hookState = { refs: [] },
     serverConfig = {},
     manualSelection = false,
+    managedSelection = null,
   }) => {
     const effects = [];
     const selections = [];
@@ -563,6 +564,7 @@ test("local composer uses configured pairs and lowers only its config threshold"
       conversationId,
       draft: null,
       manualSelection,
+      managedSelection,
       modelsForPicker() {},
       picker() {},
       render() {},
@@ -590,13 +592,22 @@ test("local composer uses configured pairs and lowers only its config threshold"
     const result = plain(
       evaluate(
         patchedComposer,
-        "LocalComposer(available,serverConfig,conversationId,manualSelection)",
+        "LocalComposer(available,serverConfig,conversationId,manualSelection,managedSelection)",
         globals,
       ),
     );
     for (const effect of effects) effect();
     return { result, selections: plain(selections) };
   };
+  const managedCalls = [];
+  const managed = runComposer({
+    available: [{ id: "gpt-5.6-sol:high", model: "gpt-5.6-sol", reasoningEffort: "high" }],
+    conversationId: "existing", manualSelection: true,
+    managedSelection: { isAeon: true, selectModelAndReasoningEffort: (...args) => managedCalls.push(args.slice(0, 2)) },
+  });
+  assert.deepEqual(managed.selections, []);
+  assert.deepEqual(managedCalls, [["gpt-5.6-sol", "high"]]);
+
   const unavailableDefault = runComposer({
     available: [
       { id: "gpt-5.6-sol:high", model: "gpt-5.6-sol", reasoningEffort: "high" },
@@ -819,7 +830,7 @@ test("local composer patches fail closed on drift, duplicate, and partial states
       ...(apply === applyLocalComposerResolverPatch ? [
         fixture().replace("removeXHigh:", "changed:"),
         fixture().replace("if(o.length>=3)return o", "if(o.length>=4)return o"),
-      ] : [fixture().replace(
+      ] : [fixture().replace("draftSelection?.isAeon", "draftSelection==null"), fixture().replace("draftSelection.selectModelAndReasoningEffort", "other.selectModelAndReasoningEffort"), fixture().replace(
         "[conversationId,hostId,host.cwd]",
         "[conversationId,host.hostId,host.cwd]",
       )]),
