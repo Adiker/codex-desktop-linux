@@ -8,6 +8,10 @@ const test = require("node:test");
 const util = require("node:util");
 const vm = require("node:vm");
 const official = require("./fixtures/official-response-annotation.json");
+official.KQs = official.KQs.replace(
+  "p=e=>{let target=e.target instanceof Element?e.target:null;if(!e.defaultPrevented){",
+  "p=e=>{if(e.target instanceof Element&&e.target,!e.defaultPrevented){",
+);
 const {
   GUARD_NAME, HANDLER_MARKER, RUNTIME_MARKER, enabled,
   codexLinuxResponseAnnotationOwnsSubmitShortcut: ownsShortcut,
@@ -229,10 +233,10 @@ test("missing, ambiguous, changed, and partially patched contracts leave assets 
     official.KQs + official.KQs,
     official.KQs.replace("Kqt(n,e)&&e.preventDefault()", "Kqt(n,e)"),
     official.KQs.replace("onKeyDown:p", "onKeyDown:otherHandler"),
-    // The retired pre-26.1021 target guard is no longer accepted.
+    // The retired target guard is no longer accepted.
     official.KQs.replace(
-      "p=e=>{let target=e.target instanceof Element?e.target:null;if(!e.defaultPrevented){",
       "p=e=>{if(e.target instanceof Element&&e.target,!e.defaultPrevented){",
+      "p=e=>{let target=e.target instanceof Element?e.target:null;if(!e.defaultPrevented){",
     ),
     official.KQs.replace("id:n,accelerator:", "id:otherCommand,accelerator:"),
     official.KQs + `/*${RUNTIME_MARKER}*/`,

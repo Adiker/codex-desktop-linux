@@ -74,7 +74,7 @@ function sha256(contents) {
 
 function currentBundleFixture() {
   return [
-    "var CurrentWatcher=class{runsInsideWsl;workspaceRoot=new Root(this);hostConfig={id:`local`," +
+    "var CurrentWatcher=class{runsInsideWsl;processOwner;workspaceRoot=new Root(this);hostConfig={id:`local`," +
       "display_name:`Local`,kind:`local`};id=`local`;isLocal=!0;",
     "async platformPath(){return x}",
     "getFileSystemPath(e){return e}",
@@ -131,11 +131,12 @@ const CURRENT_BOOTSTRAP_REMOTE_FILE_WATCH = [
 const CURRENT_PARCEL_HELPER =
   "async function oye(e,t){return new sye(await import(`@parcel/watcher`),e,t).start()}";
 const CURRENT_GIT_ROUTE_PREFIX =
-  "case`git`:{let s=getIgnoreSource(),e=new Que(s);return{git:{watchIgnoreSources:s?void 0:" +
-  "{getEnvironment:async()=>{if(n==null)throw Error(`Git hosts require a main RPC connection`);" +
-  "return n.getLocalGitIgnoreEnvironment()},getWatchTargets:Bee}," +
-  "createExecutionHost:e=>{if(n==null)throw Error(`Git hosts require a main RPC connection`);" +
-  "return new nde(n,e)},startMetadataWatch:(t,n)=>t.isLocal?" +
+  "case`git`:{let s=getIgnoreSource(),e=new Que(s,p=>{let x=p.getPid();if(x==null)return;" +
+  "emit({type:`worker-process-started`,pid:x});let q=()=>emit({type:`worker-process-exited`,pid:x});p.wait().then(q,q)});" +
+  "return{git:{watchIgnoreSources:s?void 0:{getEnvironment:async()=>env(),getWatchTargets:Bee}," +
+  "createExecutionHost:h=>{if(h.id===e.id&&!remote(h))return e;if(n==null)" +
+  "throw Error(`Git hosts require a main RPC connection`);return new nde(n,h)}," +
+  "startMetadataWatch:(t,n)=>t.isLocal?" +
   "process.platform===`linux`&&n.recursive!==!1?oye(n,{ignoredPaths:[]}):" +
   "e.startFileWatch(n):t.startFileWatch(n),";
 const CURRENT_PARCEL_ROUTE =
@@ -152,7 +153,7 @@ const CURRENT_GIT_ROUTE_SUFFIX = "}}}}case`open-in`:";
 
 function currentWorkerSource(route = CURRENT_PARCEL_ROUTE) {
   return [
-    "var Que=class{runsInsideWsl;workspaceRoot=new WorkerRoot(this);hostConfig={id:`local`,display_name:`Local`," +
+    "var Que=class{runsInsideWsl;processOwner;workspaceRoot=new WorkerRoot(this);hostConfig={id:`local`,display_name:`Local`," +
       "kind:`local`};id=`local`;isLocal=!0;",
     CURRENT_WORKER_LOCAL_FILE_WATCH,
     "};var CurrentWorkerRemote=class{",
@@ -171,7 +172,7 @@ function currentBootstrapSource() {
   return [
     "var CurrentSrcRemote=class{",
     CURRENT_BOOTSTRAP_REMOTE_FILE_WATCH,
-    "};var are=class{runsInsideWsl;workspaceRoot=new SrcRoot(this);hostConfig={id:`local`,display_name:`Local`," +
+    "};var are=class{runsInsideWsl;processOwner;workspaceRoot=new SrcRoot(this);hostConfig={id:`local`,display_name:`Local`," +
       "kind:`local`};id=`local`;isLocal=!0;",
     CURRENT_BOOTSTRAP_LOCAL_FILE_WATCH,
     "};",
@@ -326,12 +327,12 @@ test("correlates minified aliases instead of pinning their spellings", () => {
     "async function parcelStart(root,settings){return new ParcelWatcher(" +
     "await import(`@parcel/watcher`),root,settings).start()}";
   const gitRoutePrefix =
-    "case`git`:{let ignoreSource=getIgnoreSource(),localHost=new LocalHost(ignoreSource);return{git:{" +
-    "watchIgnoreSources:ignoreSource?void 0:{getEnvironment:async()=>{" +
+    "case`git`:{let ignoreSource=getIgnoreSource(),localHost=new LocalHost(ignoreSource,proc=>{" +
+    "let pid=proc.getPid();if(pid==null)return;emit({type:`worker-process-started`,pid:pid});" +
+    "let exit=()=>emit({type:`worker-process-exited`,pid:pid});proc.wait().then(exit,exit)});return{git:{" +
+    "watchIgnoreSources:ignoreSource?void 0:{getEnvironment:async()=>env(),getWatchTargets:getWatchTargets}," +
+    "createExecutionHost:executionOptions=>{if(executionOptions.id===localHost.id&&!remote(executionOptions))return localHost;" +
     "if(mainConnection==null)throw Error(`Git hosts require a main RPC connection`);" +
-    "return mainConnection.getLocalGitIgnoreEnvironment()},getWatchTargets:getWatchTargets}," +
-    "createExecutionHost:executionOptions=>{if(mainConnection==null)" +
-    "throw Error(`Git hosts require a main RPC connection`);" +
     "return new RemoteHost(mainConnection,executionOptions)}," +
     "startMetadataWatch:(host,options)=>host.isLocal?" +
     "process.platform===`linux`&&options.recursive!==!1?" +
@@ -654,7 +655,7 @@ test("rejects dual ownership, unrelated lookalikes, and unproven minified aliase
     },
     {
       name: "an uncorrelated main connection alias",
-      worker: currentWorkerSource().replace("new nde(n,e)", "new nde(other,e)"),
+      worker: currentWorkerSource().replace("new nde(n,h)", "new nde(other,h)"),
     },
   ];
 

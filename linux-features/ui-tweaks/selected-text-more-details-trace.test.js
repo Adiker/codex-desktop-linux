@@ -80,7 +80,7 @@ test("trace registry cleanup cannot remove a newer request and captured stream c
 });
 
 function nativeFixture() {
-  return 'async function Sender(scope,input){let overrides=input.gizmoEditor??scope.get(settings,input.conversationId),cache={cacheStatus:`missing`,clientPrepareState:`none`,inFlightPrepared:null},first=input.first,recovered=input.recovered;if(first)overrides.onModelMessage(first.message);if(recovered)overrides.onModelMessage(recovered);let result=await scope.get(service).startCompletionStream({assertRequestCurrent:()=>{},onPrepareRequestStart:()=>{},onRequestStart:()=>{},onResponse:response=>{},onTiming:timing=>{},onStreamData:overrides.onStreamData,onComplete:()=>{},onTransportClose:()=>{},onError:failed,onRecoverableError:failed,inFlightPrepared:cache.inFlightPrepared,request:input});return result}';
+  return 'async function Sender(scope,input){let overrides=input.gizmoEditor??scope.get(settings,input.conversationId),cache={cacheStatus:`missing`,clientPrepareState:`none`,inFlightPrepared:null},first=input.first,recovered=input.recovered;if(first)overrides.onModelMessage(first.message);if(recovered)overrides.onModelMessage(recovered);let result=await scope.get(service).startCompletionStream({previewSession:input.previewSession,assertRequestCurrent:()=>{},onPrepareRequestStart:()=>{},onRequestStart:()=>{},onResponse:response=>{},onTiming:timing=>{},onStreamData:overrides.onStreamData,onComplete:()=>{},onTransportClose:()=>{},onError:failed,onRecoverableError:failed,inFlightPrepared:cache.inFlightPrepared,request:input});return result}';
 }
 
 test("native tracing is complete and idempotent and rejects partial callback drift", () => {
