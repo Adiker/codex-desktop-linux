@@ -18,3 +18,6 @@ filesystem socket. App-server standard input, output, error, and lifecycle are
 forwarded over that port; no app-server messages are interpreted. The feature is
 experimental and disabled by default. Select `app-server-main-process` with
 `make setup-native` and rebuild with `make install-native` to enable it.
+
+This feature cannot be enabled together with `shared-app-server-socket`: that
+transport starts its own app-server from the restricted utility process.

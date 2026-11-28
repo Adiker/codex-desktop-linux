@@ -7,13 +7,19 @@ const MAIN = new RegExp(
   String.raw`function\((?<kind>${ID})\)\{let\{entry:(?<entry>${ID}),serviceName:(?<service>${ID})\}=(?<map>${ID})\[\k<kind>\];return (?<electron>${ID})\.utilityProcess\.fork\(\(0,(?<path>${ID})\.join\)\(__dirname,\k<entry>\),\[\],\{serviceName:\k<service>\}\)\}`,
   "g",
 );
+const MAIN_LAUNCH = new RegExp(
+  String.raw`\(0,${ID}\.${ID}\)\("app-server-host"\),${ID}=\(0,${ID}\.${ID}\)\("app-server-host"\);${ID}\.once\("spawn",\(\)=>${ID}\.info\("App server utility started"`,
+  "g",
+);
+const MAIN_MAPPING = '"app-server-host":{entry:"app-server-host.js",serviceName:"App server host"}';
 const MAIN_RESOURCE = 'require(require("node:path").join(process.resourcesPath,"..",".codex-linux","features","app-server-main-process","bridge-main.js"))';
 const UTILITY_RESOURCE = 'require(require("node:path").join(process.resourcesPath,"..",".codex-linux","features","app-server-main-process","bridge-utility.js"))';
-const HOST_MARKER = "codexLinuxLocalAppServer";
+const HOST_MARKER = "codexLinuxChild";
 
 function patchMain(source) {
   const matches = [...source.matchAll(MAIN)];
-  if (matches.length !== 1 || !source.includes('"App server utility started"')) return null;
+  if (matches.length !== 1 || [...source.matchAll(MAIN_LAUNCH)].length !== 1 ||
+      source.split(MAIN_MAPPING).length !== 2) return null;
   const { kind, electron } = matches[0].groups;
   const original = matches[0][0];
   const callStart = original.indexOf("return ") + "return ".length;
@@ -26,21 +32,26 @@ function patchMain(source) {
 function patchHost(source) {
   const anchors = [
     'process.parentPort.on("message",e=>{',
-    "this.spawnProcess()",
-    "spawnProcess(){",
-    'i=(0,n.spawn)(t,r,{stdio:["pipe","pipe","pipe"],env:this.options.env,cwd:this.options.cwd})',
-    "new G({...t,args:[...t.args,...n??[]]},this.ioStatsTracker)",
-    ";if(!i.pid)throw Error(`Failed to spawn Codex CLI",
+    'this.options.hostConfig.id',
+    'constructor(e,t){this.options=e,this.ioStatsTracker=t,this.stdoutMessageReader=',
+    'this.spawnProcess()',
+    'spawnProcess(){let e=this.options.spawnCommand??this.options.executablePath,t=h.K.resolve(e,{env:this.options.env})??e,r=this.options.spawnArgs??this.options.args,i=(0,n.spawn)(t,r,{stdio:["pipe","pipe","pipe"],env:this.options.env,cwd:this.options.cwd})',
+    'let n="local"===this.options.hostConfig.kind&&null==t.spawnCommand&&null==this.options.startupCommand?await this.options.getAppServerArgs?.(t.executablePath):void 0;return this.kind="stdio",new G({...t,args:[...t.args,...n??[]]},this.ioStatsTracker)',
   ];
-  if (anchors.some((anchor) => source.split(anchor).length !== 2)) return null;
+  if (anchors.some((anchor) => source.split(anchor).length !== 2) ||
+      /\bcodexLinux(?:Options|Child|Executable)\b/.test(source)) return null;
   let result = source;
-  result = result.replace(anchors[0], `${anchors[0]}if(e.data?.type===\"codex-linux-app-server-bridge\"){${UTILITY_RESOURCE}.accept(e);return}`);
-  result = result.replace(anchors[1], 'this.spawnProcess().catch(e=>{if(this.readyState!==I.vj.Closed){this.onProcessError(e),this.readyState=I.vj.Closed,this.emitClose({type:"close",code:null,reason:e.message,signal:null})}})');
-  result = result.replace(anchors[2], "async spawnProcess(){");
-  result = result.replace(anchors[3], `i=this.options.${HOST_MARKER}?await ${UTILITY_RESOURCE}.spawn(t,r,{env:this.options.env,cwd:this.options.cwd}):(0,n.spawn)(t,r,{stdio:["pipe","pipe","pipe"],env:this.options.env,cwd:this.options.cwd})`);
-  result = result.replace(anchors[5], ";if(this.readyState!==I.vj.Connecting){i.kill();return}if(!i.pid)throw Error(`Failed to spawn Codex CLI");
-  result = result.replace(anchors[4], `new G({...t,${HOST_MARKER}:this.options.hostConfig.kind===\"local\"&&this.options.hostConfig.id===\"local\"&&null==t.spawnCommand&&null==this.options.startupCommand,args:[...t.args,...n??[]]},this.ioStatsTracker)`);
-  return result;
+  result = result.replace(anchors[0], `${anchors[0]}if(e.data?.type==="codex-linux-app-server-bridge"){${UTILITY_RESOURCE}.accept(e);return}`);
+  result = result.replace(anchors[3], 'this.spawnProcess(arguments[2])');
+  result = result.replace(anchors[4], anchors[4].replace('spawnProcess(){', 'spawnProcess(codexLinuxChild){').replace('i=(0,n.spawn)', 'i=codexLinuxChild??(0,n.spawn)'));
+  const args = '{...t,args:[...t.args,...n??[]]}';
+  const connect = anchors[5].replace(`return this.kind="stdio",new G(${args},this.ioStatsTracker)`,
+    `let codexLinuxOptions=${args},codexLinuxChild;` +
+    `if(this.options.hostConfig.kind==="local"&&this.options.hostConfig.id==="local"&&null==t.spawnCommand&&null==this.options.startupCommand){` +
+    `let codexLinuxExecutable=codexLinuxOptions.spawnCommand??codexLinuxOptions.executablePath;` +
+    `codexLinuxChild=await ${UTILITY_RESOURCE}.spawn(h.K.resolve(codexLinuxExecutable,{env:codexLinuxOptions.env})??codexLinuxExecutable,codexLinuxOptions.spawnArgs??codexLinuxOptions.args,{env:codexLinuxOptions.env,cwd:codexLinuxOptions.cwd})}` +
+    `return this.kind="stdio",new G(codexLinuxOptions,this.ioStatsTracker,codexLinuxChild)`);
+  return result.replace(anchors[5], connect);
 }
 
 function patchExtractedApp(dir) {
@@ -54,11 +65,11 @@ function patchExtractedApp(dir) {
   const alreadyMain = sources.filter((s) => s.includes("bridge-main.js"));
   const completeHost = [
     'if(e.data?.type==="codex-linux-app-server-bridge")',
-    'this.spawnProcess().catch(e=>',
-    'async spawnProcess(){',
-    `this.options.${HOST_MARKER}?await `,
-    'if(this.readyState!==I.vj.Connecting){i.kill();return}',
-    `${HOST_MARKER}:this.options.hostConfig.kind==="local"`,
+    'this.spawnProcess(arguments[2])',
+    'spawnProcess(codexLinuxChild){',
+    'i=codexLinuxChild??(0,n.spawn)',
+    'this.options.hostConfig.id==="local"',
+    'codexLinuxChild=await ',
   ].every((anchor) => host.split(anchor).length === 2);
   if (alreadyMain.length === 1 && completeHost && host.split("bridge-utility.js").length === 3) return { matched: true, changed: false };
   if (alreadyMain.length || host.includes(HOST_MARKER) || host.includes("bridge-utility.js")) return { matched: false, changed: false, reason: "Incomplete bridge patch" };

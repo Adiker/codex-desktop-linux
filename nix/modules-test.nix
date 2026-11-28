@@ -149,13 +149,17 @@ assert lib.assertMsg
   (!(builtins.tryEval (features.normalize [ "account-switcher" "shared-app-server-socket" ])).success)
   "Account switching conflict with shared app-server socket was accepted";
 assert lib.assertMsg
+  (!(builtins.tryEval (features.normalize [ "app-server-main-process" "shared-app-server-socket" ])).success)
+  "Main-process bridge conflict with shared app-server socket was accepted";
+assert lib.assertMsg
   (lib.all (package:
     let selected = package.passthru.linuxFeatureIds;
     in features.normalize selected == selected
       && lib.elem "shared-app-server-socket" selected
       && !(lib.elem "account-switcher" selected)
+      && !(lib.elem "app-server-main-process" selected)
   ) maximalPackages)
-  "Maximal Nix profiles must retain the shared server without conflicting account switching";
+  "Maximal Nix profiles must retain the shared server without conflicting features";
 assert lib.assertMsg
   (accountSwitcherPackage.passthru.linuxFeatureIds == [ "account-switcher" ]
     && lib.hasInfix secretToolBin accountSwitcherPackage.installPhase

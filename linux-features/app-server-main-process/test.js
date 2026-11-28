@@ -1,6 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const { once, EventEmitter } = require("node:events");
 const { MessageChannel } = require("node:worker_threads");
 const fs = require("node:fs");
@@ -83,28 +84,65 @@ test("bridge terminates the owned child", async () => {
 });
 
 test("patches the utility fork only at a unique current anchor", () => {
-  const main = '"App server utility started";function(e){let{entry:t,serviceName:r}=s[e];return i.utilityProcess.fork((0,n.join)(__dirname,t),[],{serviceName:r})}';
+  const main = 'let e=(0,h.j)("app-server-host"),t=(0,s.$Cz)("app-server-host");e.once("spawn",()=>t.info("App server utility started"));let s={"app-server-host":{entry:"app-server-host.js",serviceName:"App server host"}};function(e){let{entry:t,serviceName:r}=s[e];return i.utilityProcess.fork((0,n.join)(__dirname,t),[],{serviceName:r})}';
   assert.match(patchMain(main), /app-server-host.*bridge-main\.js/);
   assert.equal(patchMain(main + main), null);
+  assert.equal(patchMain(main.replace('(0,h.j)("app-server-host")', '(0,h.j)("renamed-host")')), null);
+  assert.equal(patchMain(main.replace('entry:"app-server-host.js"', 'entry:"renamed-host.js"')), null);
 });
 
-test("patches only the local app-server stdio path", () => {
-  const host = 'process.parentPort.on("message",e=>{});this.spawnProcess();spawnProcess(){let i=(0,n.spawn)(t,r,{stdio:["pipe","pipe","pipe"],env:this.options.env,cwd:this.options.cwd});if(!i.pid)throw Error(`Failed to spawn Codex CLI`)};new G({...t,args:[...t.args,...n??[]]},this.ioStatsTracker)';
+test("keeps non-bridged spawn failures synchronous and rejects bridged connect failures", async () => {
+  const host = 'this.options.hostConfig.id;process.parentPort.on("message",e=>{});constructor(e,t){this.options=e,this.ioStatsTracker=t,this.stdoutMessageReader=null,this.spawnProcess()}spawnProcess(){let e=this.options.spawnCommand??this.options.executablePath,t=h.K.resolve(e,{env:this.options.env})??e,r=this.options.spawnArgs??this.options.args,i=(0,n.spawn)(t,r,{stdio:["pipe","pipe","pipe"],env:this.options.env,cwd:this.options.cwd});if(!i.pid)throw Error(`Failed to spawn Codex CLI`)};let n="local"===this.options.hostConfig.kind&&null==t.spawnCommand&&null==this.options.startupCommand?await this.options.getAppServerArgs?.(t.executablePath):void 0;return this.kind="stdio",new G({...t,args:[...t.args,...n??[]]},this.ioStatsTracker)';
   const patched = patchHost(host);
-  assert.match(patched, /codexLinuxLocalAppServer:this\.options\.hostConfig\.kind===\"local\"/);
+  assert.ok(patched);
   assert.match(patched, /bridge-utility\.js/);
-  const condition = patched.match(/codexLinuxLocalAppServer:(.*?),args:\[/)?.[1];
-  assert.ok(condition);
-  const useBridge = new Function("t", `return (${condition})`); // eslint-disable-line no-new-func
-  const selected = (hostConfig, options = {}, launch = {}) =>
-    useBridge.call({ options: { hostConfig, ...options } }, launch);
-  assert.equal(selected({ kind: "local", id: "local" }), true);
-  assert.equal(selected({ kind: "local", id: "durable" }), false);
-  assert.equal(selected({ kind: "ssh", id: "local" }), false);
-  assert.equal(selected({ kind: "local", id: "local" }, { startupCommand: {} }), false);
-  assert.equal(selected({ kind: "local", id: "local" }, {}, { spawnCommand: "ssh" }), false);
-  assert.equal(patchHost(host.replace("spawnProcess(){", "spawnProcessChanged(){")), null);
-  assert.equal(patchHost(host.replace("if(!i.pid)", "if(i.pid==null)")), null);
+  assert.match(patched, /spawnProcess\(codexLinuxChild\)/);
+  assert.doesNotMatch(patched, /async spawnProcess/);
+  const start = patched.indexOf('let n="local"===this.options.hostConfig.kind');
+  const body = patched.slice(start);
+  let bridgeCalls = 0;
+  const failure = Error("bridge spawn failed");
+  const bridge = { spawn: async () => { bridgeCalls++; throw failure; } };
+  const load = (name) => name === "node:path" ? { join: () => "bridge" } : bridge;
+  const connectionFailure = Error("Failed to spawn Codex CLI");
+  const G = class { constructor() { throw connectionFailure; } };
+  const connect = new Function("t", "G", "h", "require", `return (async function(){${body}}).call(this)`); // eslint-disable-line no-new-func
+  const launch = { executablePath: "/codex", args: [], env: {} };
+  const invoke = (hostConfig, options = {}, overrides = {}) => connect.call(
+    { options: { hostConfig, ...options } }, { ...launch, ...overrides }, G, { K: { resolve: () => null } }, load,
+  );
+  for (const [hostConfig, options, overrides] of [
+    [{ kind: "ssh", id: "local" }, {}, {}],
+    [{ kind: "local", id: "durable" }, {}, {}],
+    [{ kind: "local", id: "local" }, { startupCommand: {} }, {}],
+    [{ kind: "local", id: "local" }, {}, { spawnCommand: "ssh" }],
+  ]) await assert.rejects(invoke(hostConfig, options, overrides), (error) => error === connectionFailure);
+  assert.equal(bridgeCalls, 0);
+  await assert.rejects(invoke({ kind: "local", id: "local" }), (error) => error === failure);
+  assert.equal(bridgeCalls, 1);
+  for (const [before, after] of [
+    ['h.K.resolve(e,{env:this.options.env})', 'h.X.resolve(e,{env:this.options.env})'],
+    ['this.options.startupCommand?', 'this.options.renamedStartup?'],
+    ['this.options.hostConfig.kind&&null==t.spawnCommand', 'this.options.hostConfig.type&&null==t.spawnCommand'],
+    ['this.spawnProcess()', 'this.spawnChanged()'],
+    ['this.options.hostConfig.id;', 'this.options.hostConfig.hostId;'],
+  ]) {
+    assert.notEqual(host.replace(before, after), host);
+    assert.equal(patchHost(host.replace(before, after)), null);
+  }
+});
+
+test("rejects the shared app-server socket feature combination", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-feature-conflict-"));
+  try {
+    const config = path.join(dir, "features.json");
+    fs.writeFileSync(config, JSON.stringify({ enabled: ["app-server-main-process", "shared-app-server-socket"] }));
+    const result = spawnSync(process.execPath, [path.join(__dirname, "../../scripts/lib/linux-features.js"), "--enabled-feature-dirs0"], {
+      encoding: "utf8", env: { ...process.env, CODEX_LINUX_FEATURES_CONFIG: config },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /app-server-main-process.*conflicts with.*shared-app-server-socket/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("patches both launch sites in the signed upstream bundle", {
@@ -118,27 +156,6 @@ test("patches both launch sites in the signed upstream bundle", {
   assert.ok(host);
   new vm.Script(patched[0]);
   new vm.Script(host);
-  // Closing while the main-process spawn is still in flight must kill the
-  // eventual child instead of reopening an already closed connection.
-  const methodStart = host.indexOf("async spawnProcess(){");
-  const methodEnd = host.indexOf("}onProcessError=", methodStart);
-  assert.ok(methodStart >= 0 && methodEnd > methodStart);
-  const method = host.slice(methodStart, methodEnd + 1);
-  let resolveSpawn;
-  const bridge = { spawn: () => new Promise((resolve) => { resolveSpawn = resolve; }) };
-  const load = (name) => name === "node:path" ? { join: () => "bridge" } : bridge;
-  const spawnProcess = new Function("h", "n", "I", "p", "a", "require", // eslint-disable-line no-new-func
-    `return (class {${method}}).prototype.spawnProcess`)(
-    { K: { resolve: () => null } }, {}, { vj: { Connecting: 0, Closed: 3 } }, {}, {}, load,
-  );
-  const connection = { options: { executablePath: "/codex", args: [], env: {}, codexLinuxLocalAppServer: true }, readyState: 0 };
-  let killed = false;
-  const starting = spawnProcess.call(connection);
-  connection.readyState = 3;
-  resolveSpawn({ pid: 123, kill: () => { killed = true; } });
-  await starting;
-  assert.equal(killed, true);
-  assert.equal(connection.proc, undefined);
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "codex-app-server-patch-"));
   try {
     const target = path.join(temp, ".vite", "build");
@@ -147,7 +164,7 @@ test("patches both launch sites in the signed upstream bundle", {
     assert.deepEqual(patchExtractedApp(temp), { matched: true, changed: true });
     assert.deepEqual(patchExtractedApp(temp), { matched: true, changed: false });
     const hostFile = path.join(target, "app-server-host.js");
-    const damaged = fs.readFileSync(hostFile, "utf8").replace("codexLinuxLocalAppServer:", "incompleteBridge:");
+    const damaged = fs.readFileSync(hostFile, "utf8").replace("codexLinuxChild=await", "incompleteBridge=await");
     fs.writeFileSync(hostFile, damaged);
     assert.equal(patchExtractedApp(temp).matched, false);
     assert.equal(fs.readFileSync(hostFile, "utf8"), damaged);
